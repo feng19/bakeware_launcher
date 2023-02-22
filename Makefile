@@ -1,0 +1,77 @@
+# Makefile for building application launcher
+#
+# Makefile targets:
+#
+# all/install   build and install the NIF
+# clean         clean build products and intermediates
+#
+# CC            C compiler
+# CFLAGS	compiler flags for compiling all C files
+# LDFLAGS	linker flags for linking all binaries
+#
+PREFIX = _build
+BUILD  = _build/obj
+
+CFLAGS ?= -O2 -Wall -Wextra -Wno-unused-parameter -pedantic
+CFLAGS += -D_GNU_SOURCE
+LDFLAGS ?=
+OUTPUT_FLAGS = -o
+ifeq ($(OS),Windows_NT)
+	OUTPUT_FLAGS = -pipe -Wl,-o
+	SHELL = cmd
+endif
+
+BAKEWARE_OBJECTS = \
+	$(BUILD)/cache.o \
+	$(BUILD)/cpio.o \
+	$(BUILD)/index.o \
+	$(BUILD)/main.o \
+	$(BUILD)/rm_fr.o \
+	$(BUILD)/sha1.o \
+	$(BUILD)/sha_read.o \
+	$(BUILD)/trailer.o \
+	$(BUILD)/unzstd.o \
+	$(BUILD)/utils.o
+
+ZSTD_OBJECTS = $(BUILD)/zstd/lib/decompress/huf_decompress.o \
+	$(BUILD)/zstd/lib/decompress/zstd_ddict.o \
+	$(BUILD)/zstd/lib/decompress/zstd_decompress.o \
+	$(BUILD)/zstd/lib/decompress/zstd_decompress_block.o \
+	$(BUILD)/zstd/lib/common/debug.o \
+	$(BUILD)/zstd/lib/common/entropy_common.o \
+	$(BUILD)/zstd/lib/common/error_private.o \
+	$(BUILD)/zstd/lib/common/fse_decompress.o \
+	$(BUILD)/zstd/lib/common/pool.o \
+	$(BUILD)/zstd/lib/common/threading.o \
+	$(BUILD)/zstd/lib/common/xxhash.o \
+	$(BUILD)/zstd/lib/common/zstd_common.o
+
+ZSTD_BUILD_DIRS = $(BUILD)/zstd/lib/decompress $(BUILD)/zstd/lib/common
+
+all: $(BUILD) $(PREFIX) $(ZSTD_BUILD_DIRS) $(PREFIX)/launcher
+
+$(BUILD)/%.o: src/%.c
+	@echo " CC $(notdir $@)"
+	$(CC) -c $(CFLAGS) -o $@ $<
+
+$(PREFIX)/launcher: $(BAKEWARE_OBJECTS) $(ZSTD_OBJECTS)
+	@echo " LD $(notdir $@)"
+	$(CC) $^ $(LDFLAGS) $(OUTPUT_FLAGS)$@
+	strip $@
+
+ifeq ($(OS),Windows_NT)
+$(PREFIX) $(BUILD) $(ZSTD_BUILD_DIRS):
+	if not exist "$@" mkdir "$@"
+else
+$(PREFIX) $(BUILD) $(ZSTD_BUILD_DIRS):
+	mkdir -p $@
+endif
+
+clean:
+	$(RM) $(PREFIX)/launcher \
+	    $(BUILD)/*.o
+
+.PHONY: all clean calling_from_make
+
+# Don't echo commands unless the caller exports "V=1"
+${V}.SILENT:
